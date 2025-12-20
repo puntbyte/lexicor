@@ -1,0 +1,29 @@
+name: lexicor
+description: >-
+  A Dart package providing a WordNet-backed lexical engine (lookup, morphology, relations).
+version: 0.1.0
+# repository: https://github.com/my_org/my_repo
+
+topics:
+  - dictionary
+  - wordnet
+  - morphology
+  - lookup
+  - relations
+
+environment:
+  sdk: ^3.10.0
+
+# Add regular dependencies here.
+dependencies:
+  meta: ^1.16.0
+  path: ^1.9.1
+  sqlite3: ^2.8.0
+
+dev_dependencies:
+  test: ^1.26.0
+  very_good_analysis: ^10.0.0
+
+
+
+
