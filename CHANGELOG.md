@@ -1,3 +1,7 @@
+## 0.1.2
+
+- **Refactor**: Consolidate `ConceptImpl` into the `concept.dart` model file.
+
 ## 0.1.1
 
 - **Documentation**: Improved README and added example.

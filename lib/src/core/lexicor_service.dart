@@ -3,7 +3,7 @@
 import 'dart:collection';
 
 import 'package:lexicor/lexicor.dart';
-import 'package:lexicor/src/internal/concept_impl.dart';
+import 'package:lexicor/src/models/concept.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 /// SQLite-backed service powering Lexicor.

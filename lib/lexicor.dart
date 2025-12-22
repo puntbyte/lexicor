@@ -15,7 +15,7 @@ export 'src/enums/speech_part.dart';
 export 'src/enums/storage_mode.dart';
 
 // Export models
-export 'src/models/concept.dart';
+export 'src/models/concept.dart' hide ConceptImpl;
 export 'src/models/related_word.dart';
 
 // Export results
