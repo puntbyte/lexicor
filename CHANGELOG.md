@@ -1,3 +1,7 @@
+## 0.1.3
+
+- **Documentation**: Fixed typo in README.
+
 ## 0.1.2
 
 - **Refactor**: Consolidated the internal `ConceptImpl` class into `concept.dart` to improve code 
