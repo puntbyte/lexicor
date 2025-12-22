@@ -5,90 +5,104 @@ import 'dart:isolate';
 
 import 'package:lexicor/lexicor.dart';
 import 'package:lexicor/src/core/lexicor_service.dart';
-import 'package:lexicor/src/results/lookup_result.dart';
-import 'package:lexicor/src/results/relation_result.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-/// Public entrypoint for the Lexicor WordNet engine.
+/// The public entry point for the Lexicor WordNet engine.
 ///
-/// Use [Lexicor.init] to create an instance. Always call [close] when done to
-/// release native resources.
-///
-/// The API exposes high-level, discoverable results:
-/// - [lookup] returns a [LookupResult] (includes resolved morphological forms
-///   and ordered `Concept`s).
-/// - [related] returns a [RelationResult] (semantic & lexical links).
+/// Use [Lexicor.init] to create an instance. Always call [close] when done to release native
+/// resources.
 class Lexicor {
   final LexicorService _service;
 
+  // Private constructor to enforce async initialization.
   Lexicor._(this._service);
 
-  /// Initialize the Lexicor engine from the packaged SQLite asset.
+  /// Initializes the Lexicor engine from the packaged SQLite asset.
   ///
-  /// By default this will resolve the package asset at:
-  /// `package:lexicor/assets/dictionary.sqlite`. Pass [packageAssetPath] to
-  /// override when embedding the DB elsewhere.
+  /// **Parameters:**
+  /// * [mode]: Determines whether to load the DB into RAM or read from disk.
+  ///   Defaults to [StorageMode.onDisk].
+  /// * [customPath]: An optional file path to override the bundled asset location.
+  ///   Required for Flutter apps (pass the path from `getApplicationDocumentsDirectory`).
   ///
-  /// If [inMemory] is true, the DB will be copied into an in-memory SQLite
-  /// instance (faster lookups at the cost of startup time and memory).
-  ///
-  /// Throws [FileSystemException] when the asset cannot be resolved.
+  /// **Throws:**
+  /// * [FileSystemException] if the package asset cannot be resolved (e.g., inside a compiled
+  ///   Flutter app without [customPath]).
+  /// * [SqliteException] if the database file is corrupt or unreadable.
   static Future<Lexicor> init({
-    bool inMemory = false,
-    String packageAssetPath = 'package:lexicor/assets/dictionary.sqlite',
+    StorageMode mode = StorageMode.onDisk,
+    String? customPath,
   }) async {
-    final uri = await Isolate.resolvePackageUri(Uri.parse(packageAssetPath));
-    if (uri == null) {
-      throw FileSystemException('Could not resolve $packageAssetPath');
+    String path;
+
+    if (customPath != null) {
+      path = customPath;
+    } else {
+      final uri = await Isolate.resolvePackageUri(
+        Uri.parse('package:lexicor/assets/dictionary.sqlite'),
+      );
+      if (uri == null) {
+        throw const FileSystemException(
+          "Could not find package asset. If running in Flutter, use 'customPath'.",
+        );
+      }
+      path = uri.toFilePath();
     }
 
-    final diskDb = sqlite3.open(uri.toFilePath());
-    if (!inMemory) {
-      return Lexicor._(LexicorService(diskDb));
-    }
+    // Always open disk DB first.
+    final diskDatabase = sqlite3.open(path);
 
-    // Copy DB into memory for faster queries; await the backup stream.
-    final memoryDb = sqlite3.openInMemory();
+    // If disk mode is requested, return immediately.
+    if (mode == StorageMode.onDisk) return Lexicor._(LexicorService(diskDatabase));
+
+    // Handle Memory Mode
     try {
-      await diskDb.backup(memoryDb, nPage: -1).drain();
-      diskDb.dispose();
-      return Lexicor._(LexicorService(memoryDb));
+      final memoryDatabase = sqlite3.openInMemory();
+
+      // Perform the backup (copy) from Disk -> Memory.
+      // nPage: -1 copies the entire database in one step.
+      await diskDatabase.backup(memoryDatabase, nPage: -1).drain.call();
+
+      // Close the disk handle as it is no longer needed.
+      diskDatabase.dispose();
+
+      return Lexicor._(LexicorService(memoryDatabase));
     } catch (e) {
-      // Clean up on failure.
-      try {
-        memoryDb.dispose();
-      } catch (_) {}
-      diskDb.dispose();
+      // Ensure we don't leave open connections on failure.
+      diskDatabase.dispose();
       rethrow;
     }
   }
 
-  /// Close the Lexicor instance and free native resources.
+  /// Closes the Lexicor instance and frees native resources.
   ///
-  /// After calling this method the instance must not be used.
+  /// After calling this method, any further calls to the instance will throw an error.
   void close() => _service.close();
 
-  /// Look up [word] and return a rich [LookupResult].
+  /// Looks up [word] and returns a rich [LookupResult].
   ///
-  /// The result:
-  /// - includes `resolvedForms` (morphological base forms tried, original first),
-  /// - contains deduplicated, ordered `Concept` objects,
-  /// - preserves sense priority (WordNet ordering).
-  LookupResult lookup(String word) => _service.lookupResult(word);
+  /// The result contains:
+  /// - `resolvedForms`: The morphological base forms tried (original first).
+  /// - `concepts`: An ordered, deduplicated list of [Concept] objects found.
+  LookupResult lookup(String word) => _service.lookup(word);
 
-  /// Return related words for a concept id as a [RelationResult].
+  /// Returns related words for a specific [concept].
   ///
   /// Optionally filter by [type] to restrict results to a specific
-  /// [RelationType] (e.g. `hypernym`).
-  RelationResult related(int conceptId, {RelationType? type}) {
-    final items = _service.getRelated(conceptId, type);
-    return RelationResult(conceptId: conceptId, items: items);
+  /// [RelationType] (e.g., [RelationType.hypernym]).
+  RelationResult related(Concept concept, {RelationType? type}) {
+    final items = _service.getRelated(concept, type);
+    return RelationResult(items);
   }
 
-  /// Return the morphological base form for [word] and [pos], if available.
+  /// Returns the morphological root of a word for a specific part of speech.
   ///
-  /// This method is provided for advanced callers who need direct morphological
-  /// access. For general lookups prefer [lookup] which performs morphology
-  /// resolution automatically.
-  String morphology(String word, PartOfSpeech pos) => _service.getMorphology(word, pos);
+  /// Example:
+  /// ```dart
+  /// lexicor.morphology('ran', SpeechPart.verb); // returns 'run'
+  /// ```
+  ///
+  /// This method is provided for advanced callers who need direct morphological access.
+  /// For general use, prefer [lookup], which performs morphology resolution automatically.
+  String morphology(String word, SpeechPart pos) => _service.getMorphology(word, pos);
 }

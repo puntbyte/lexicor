@@ -10,11 +10,14 @@ export 'src/core/lexicor.dart';
 
 // Export the categories
 export 'src/enums/domain_category.dart';
-export 'src/enums/part_of_speech.dart';
 export 'src/enums/relation_type.dart';
+export 'src/enums/speech_part.dart';
+export 'src/enums/storage_mode.dart';
 
 // Export models
 export 'src/models/concept.dart';
 export 'src/models/related_word.dart';
-export 'src/models/sense.dart';
-export 'src/models/word.dart';
+
+// Export results
+export 'src/results/lookup_result.dart';
+export 'src/results/relation_result.dart';

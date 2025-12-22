@@ -1,42 +1,32 @@
 // lib/src/results/relation_result.dart
 
-import 'package:lexicor/src/enums/relation_type.dart';
-import 'package:lexicor/src/models/related_word.dart';
+import 'package:lexicor/lexicor.dart';
 import 'package:meta/meta.dart';
 
 /// Wrapper for related-word results for a concept.
 @immutable
-class RelationResult extends Iterable<RelatedWord> {
-  /// The source concept id for which relations were fetched.
-  final int conceptId;
-
+class RelationResult {
   /// The returned related words (semantic + lexical).
   final List<RelatedWord> items;
 
   /// Create a new [RelationResult].
-  const RelationResult({
-    required this.conceptId,
-    required this.items,
-  });
+  const RelationResult(this.items);
 
-  @override
-  Iterator<RelatedWord> get iterator => items.iterator;
-
-  @override
+  /// Returns true if no related words were found.
   bool get isEmpty => items.isEmpty;
 
-  @override
+  /// Returns true if one or more related words were found.
   bool get isNotEmpty => items.isNotEmpty;
 
-  /// Filter by relationship [type].
-  List<RelatedWord> withRelation(RelationType type) =>
-      items.where((r) => r.relation == type).toList();
+  /// Returns a list filtered by a specific relationship type.
+  List<RelatedWord> byType(RelationType type) =>
+      items.where((word) => word.type == type).toList();
 
-  /// Only semantic relations.
-  List<RelatedWord> semantic() => items.where((r) => r.isSemantic).toList();
+  /// Filters the results to only semantic relations (Concept-to-Concept).
+  List<RelatedWord> get semantic => items.where((word) => word.isSemantic).toList();
 
-  /// Only lexical relations.
-  List<RelatedWord> lexical() => items.where((r) => !r.isSemantic).toList();
+  /// Filters the results to only lexical relations (Word-to-Word).
+  List<RelatedWord> get lexical => items.where((word) => !word.isSemantic).toList();
 
   /// Extract distinct words preserving insertion order.
   List<String> words({bool distinct = true}) {
@@ -54,18 +44,12 @@ class RelationResult extends Iterable<RelatedWord> {
     final seen = <String>{};
     final out = <RelatedWord>[];
     for (final r in items) {
-      final key = '${r.word}|${r.relation.id}';
+      final key = '${r.word}|${r.type.id}';
       if (seen.add(key)) out.add(r);
     }
     return out;
   }
 
-  /// Create a copy of this [RelationResult] with the given fields changed.
-  RelationResult copyWith({int? conceptId, List<RelatedWord>? items}) => RelationResult(
-    conceptId: conceptId ?? this.conceptId,
-    items: items ?? this.items,
-  );
-
   @override
-  String toString() => 'RelationResult(conceptId: $conceptId, items: ${items.length})';
+  String toString() => 'RelationResult(items: ${items.length})';
 }

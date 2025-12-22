@@ -1,7 +1,5 @@
 // lib/src/enums/relation_type.dart
 
-import 'package:meta/meta.dart';
-
 /// Types of lexical and semantic relations between concepts and words.
 ///
 /// These correspond to common relation types in lexical resources:
@@ -152,7 +150,6 @@ enum RelationType {
   ;
 
   /// Numeric DB id for the relation.
-  @protected
   final int id;
 
   /// Human-friendly label.

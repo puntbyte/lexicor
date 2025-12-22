@@ -1,31 +1,16 @@
 // lib/src/models/concept.dart
 
-import 'package:meta/meta.dart';
-import 'package:lexicor/src/enums/part_of_speech.dart';
 import 'package:lexicor/src/enums/domain_category.dart';
+import 'package:lexicor/src/enums/speech_part.dart';
 
-/// Represents a semantic concept (WordNet synset) returned by lookups.
+/// Represents a semantic concept (WordNet synset).
 ///
-/// A `Concept` is a small, immutable model containing the numeric [id] of the
-/// synset, the [PartOfSpeech], and the domain category.
-@immutable
-class Concept {
-  /// Numeric synset/concept id from the database.
-  final int id;
+/// This is an abstract interface. The internal implementation holds the
+/// database ID, which is hidden from the public API to ensure encapsulation.
+abstract class Concept {
+  /// The part of speech for this concept (e.g., Noun, Verb).
+  SpeechPart get part;
 
-  /// Part of speech for the concept (noun, verb, etc).
-  final PartOfSpeech pos;
-
-  /// Domain category of the concept (e.g. `noun.food`).
-  final DomainCategory domain;
-
-  /// Create a new [Concept].
-  const Concept({
-    required this.id,
-    required this.pos,
-    required this.domain,
-  });
-
-  @override
-  String toString() => 'Concept(id: $id, pos: ${pos.name}, domain: ${domain.label})';
+  /// The domain category of the concept (e.g., `noun.food`, `verb.motion`).
+  DomainCategory get category;
 }

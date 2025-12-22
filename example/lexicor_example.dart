@@ -1,182 +1,92 @@
-// example/lexicor_demo.dart
-import 'dart:io';
-
 import 'package:lexicor/lexicor.dart';
-
-const testWord = 'went'; // shows morphology: went -> go
-const benchWord = 'run';
-const iterations = 1000;
-const sampleLimit = 10;
 
 void main() async {
   printBanner('Lexicor — WordNet Demo');
 
-  // --- Disk mode demo ---
-  printSection('Initializing (Disk mode)');
-  late final Lexicor diskLex;
-  try {
-    diskLex = await Lexicor.init();
-    print('Disk Lexicor ready.');
+  // --- Initialize Lexicor ---
+  // Use `loadInMemory: true` for the fastest queries (recommended for servers).
+  // Use `loadInMemory: false` for instant startup (recommended for mobile apps).
+  printSection('Initializing Lexicor (in Memory)...');
+  final lexicor = await Lexicor.init(mode: StorageMode.inMemory);
+  print('✅ Lexicor is ready.');
 
-    await demoFlow(diskLex, modeLabel: 'Disk', lookupWord: testWord);
-  } finally {
-    // ensure closed even on error
-    try {
-      diskLex.close();
-    } catch (_) {}
-  }
+  // --- Run Demonstrations ---
+  await demonstrateLookup(lexicor, 'went'); // Shows morphology: went -> go
+  await demonstrateLookup(lexicor, 'bank'); // Shows multiple meanings
+  await demonstrateLookup(lexicor, 'better'); // Shows adjective morphology
 
-  print('\n');
-
-  // --- Memory mode demo ---
-  printSection('Initializing (Memory mode)');
-  late final Lexicor memLex;
-  try {
-    memLex = await Lexicor.init(inMemory: true);
-    print('Memory Lexicor ready.');
-
-    await demoFlow(memLex, modeLabel: 'Memory', lookupWord: testWord);
-  } finally {
-    try {
-      memLex.close();
-    } catch (_) {}
-  }
-
-  printBanner('Demo completed');
+  // --- Clean Up ---
+  lexicor.close();
+  printBanner('Demo Complete');
 }
 
-/// Runs the demo flow: lookup, morphology, related, and benchmarks.
-Future<void> demoFlow(Lexicor lex, {required String modeLabel, required String lookupWord}) async {
-  print('\n--- 🔍 Lookup: "$lookupWord" ($modeLabel) ---');
+/// Demonstrates the full lookup and relation-finding flow.
+Future<void> demonstrateLookup(Lexicor lexicor, String wordToLookup) async {
+  printSection('Looking up: "$wordToLookup"');
 
-  // New API: LookupResult (includes resolvedForms + concepts)
-  final result = lex.lookup(lookupWord);
+  // 1. LOOKUP
+  // This is the primary way to find concepts for a word.
+  // It automatically handles morphology (e.g., "went" becomes "go").
+  final lookupResult = lexicor.lookup(wordToLookup);
 
-  print('Query: "${result.query}"');
-  print('Resolved forms: ${result.resolvedForms.join(', ')}');
-  print('Total concepts: ${result.concepts.length}');
-  if (result.isEmpty) {
-    print('No concepts found for "$lookupWord".');
-  } else {
-    print('\nSample concepts (first $sampleLimit):');
-    for (final c in result.concepts.take(sampleLimit)) {
-      print(' • Concept ${c.id} | POS: ${c.pos.label} | Domain: ${c.domain.label}');
-    }
-
-    // show primary concept and quick helpers
-    final primary = result.primary;
-    if (primary != null) {
-      print('\nPrimary concept: ${primary.id} (${primary.pos.label}, ${primary.domain.label})');
-
-      // Related words (semantic + lexical)
-      print('\n--- 🔗 Related words for primary concept (${primary.id}) ---');
-      final related = lex.related(primary.id); // returns List<RelatedWord>
-      print('Found ${related.length} relations (showing $sampleLimit):');
-
-      for (final r in related.take(sampleLimit)) {
-        final kind = r.isSemantic ? 'semantic' : 'lexical';
-        print(' • ${r.word} [${r.relation.label}] ($kind)');
-      }
-
-      // Hypernyms only as a filtered example
-      final hypernyms = lex.related(primary.id, type: RelationType.hypernym);
-      if (hypernyms.isNotEmpty) {
-        print('\nHypernyms: ${hypernyms.map((h) => h.word).take(10).join(', ')}');
-      } else {
-        print('\nNo hypernyms found for concept ${primary.id}.');
-      }
-    }
-  }
-
-  // Morphology quick checks (explicit helper)
-  print('\n--- 🧬 Morphology examples ---');
-  print("running (verb) → ${lex.morphology('running', PartOfSpeech.verb)}");
-  print("better (adj)   → ${lex.morphology('better', PartOfSpeech.adjective)}");
-
-  // Benchmarks
-  print('\n--- 📊 Benchmarks ($modeLabel) ---');
-  await runBenchmarks(lex, benchWord, iterations);
-}
-
-/// Runs two benchmarks:
-/// 1) raw COUNT() (minimal allocation)
-/// 2) full materialized lookup (realistic)
-Future<void> runBenchmarks(Lexicor lex, String word, int iterations) async {
-  // Warm-up: a couple of calls to stabilize caches/JIT
-  lex.lookup(word);
-  lex.lookup(word);
-
-  // Prepare raw-count statement by using a tiny internal method that runs the COUNT query.
-  final rawCount = _benchmarkCount(lex, word, iterations);
-  final full = _benchmarkFull(lex, word, iterations);
-
+  // The result tells you what forms were searched and what concepts were found.
   print(
-    'Raw COUNT benchmark: ${rawCount.totalMs} ms for $iterations (avg '
-        '${rawCount.avgUs.toStringAsFixed(2)} µs/query), totalRows=${rawCount.totalRows}',
+    ' • Searched for: "${lookupResult.query}"\n'
+        ' • Resolved to: ${lookupResult.resolvedForms.join(', ')}\n'
+        ' • Found ${lookupResult.concepts.length} unique concepts.',
   );
-  print(
-    'Full materialized:  ${full.totalMs} ms for $iterations (avg ${full.avgUs.toStringAsFixed(2)} '
-        'µs/query), totalRows=${full.totalRows}',
-  );
-}
 
-/// Minimal count-style benchmark (no heavy allocations)
-_BenchResult _benchmarkCount(Lexicor lex, String word, int iterations) {
-  final sw = Stopwatch()..start();
-  var totalRows = 0;
-  for (var i = 0; i < iterations; i++) {
-    // Use the existing lookupResult but only read length to simulate minimal materialization.
-    final r = lex.lookup(word);
-    totalRows += r.concepts.length;
+  if (lookupResult.isEmpty) {
+    return; // No concepts found, end of demo for this word.
   }
-  sw.stop();
-  final totalUs = sw.elapsedMicroseconds;
-  return _BenchResult(
-    totalMs: sw.elapsedMilliseconds,
-    avgUs: totalUs / iterations,
-    totalRows: totalRows,
-  );
-}
 
-/// Full benchmark that simulates real allocation work (materializing objects)
-_BenchResult _benchmarkFull(Lexicor lex, String word, int iterations) {
-  final sw = Stopwatch()..start();
-  var totalRows = 0;
-  for (var i = 0; i < iterations; i++) {
-    final r = lex.lookup(word);
-    // simulate some processing per concept
-    for (final c in r.concepts) {
-      // small allocation to mimic app work
-      final map = {'id': c.id, 'pos': c.pos.id, 'domain': c.domain.id};
-      totalRows++;
-      // avoid optimizing away
-      if (map.isEmpty) stdout.write('');
-    }
+  // 2. FILTERING CONCEPTS
+  // You can easily filter the concepts found in the result.
+  final nouns = lookupResult.bySpeechPart(SpeechPart.noun);
+  final verbs = lookupResult.bySpeechPart(SpeechPart.verb);
+  print(' • Noun meanings: ${nouns.length}');
+  print(' • Verb meanings: ${verbs.length}');
+
+  // 3. GETTING RELATIONS
+  // Let's explore the *first* concept found for our word.
+  final primaryConcept = lookupResult.primary!;
+  print('\nExploring relationships for the primary concept of "${lookupResult.resolvedForms.last}":');
+
+  // The `related()` method returns a rich result object with all relations.
+  final relationResult = lexicor.related(primaryConcept);
+  print(' • Found ${relationResult.items.length} total relations.');
+
+  // 4. FILTERING RELATIONS
+  // The RelationResult object has helpers to find specific relationship types.
+  final hypernyms = relationResult.byType(RelationType.hypernym);
+  final hyponyms = relationResult.byType(RelationType.hyponym);
+  final antonyms = relationResult.byType(RelationType.antonym);
+  final meronyms = relationResult.byType(RelationType.partMeronym);
+
+  // Print the findings in a structured way.
+  if (hypernyms.isNotEmpty) {
+    print('   ➡️ Is a type of (Hypernyms): ${hypernyms.map((r) => r.word).take(5).join(', ')}');
   }
-  sw.stop();
-  final totalUs = sw.elapsedMicroseconds;
-  return _BenchResult(
-    totalMs: sw.elapsedMilliseconds,
-    avgUs: totalUs / iterations,
-    totalRows: totalRows,
-  );
+  if (hyponyms.isNotEmpty) {
+    print('   ➡️ Has types (Hyponyms): ${hyponyms.map((r) => r.word).take(5).join(', ')}');
+  }
+  if (meronyms.isNotEmpty) {
+    print('   ➡️ Has parts (Meronyms): ${meronyms.map((r) => r.word).take(5).join(', ')}');
+  }
+  if (antonyms.isNotEmpty) {
+    print('   ➡️ Has opposite (Antonyms): ${antonyms.map((r) => r.word).join(', ')}');
+  }
 }
 
-class _BenchResult {
-  final int totalMs;
-  final double avgUs;
-  final int totalRows;
-
-  _BenchResult({required this.totalMs, required this.avgUs, required this.totalRows});
-}
+// --- Helper Functions for Clean Output ---
 
 void printBanner(String text) {
-  print('');
-  print('==============================');
+  print('\n========================================');
   print('  $text');
-  print('==============================\n');
+  print('========================================');
 }
 
 void printSection(String title) {
-  print('\n--- $title ---');
+  final divider = '-' * (title.length + 4);
+  print('\n$divider\n  $title\n$divider');
 }
