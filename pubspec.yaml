@@ -16,7 +16,6 @@ topics:
 environment:
   sdk: ^3.10.0
 
-# Add regular dependencies here.
 dependencies:
   meta: ^1.16.0
   path: ^1.9.1
