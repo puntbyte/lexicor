@@ -1,13 +1,10 @@
-## 0.1.3
-
-- **Features**: Added `example/check_db_size.dart` tool to analyze database table and index sizes.
-- **Documentation**: Updated README with accurate database statistics (size breakdown) and license 
-  details.
-
 ## 0.1.2
 
 - **Refactor**: Consolidated the internal `ConceptImpl` class into `concept.dart` to improve code 
   organization while maintaining strict API encapsulation.
+- **Features**: Added `example/check_db_size.dart` tool to analyze database table and index sizes.
+- **Documentation**: Updated README with accurate database statistics (size breakdown) and license
+  details.
 
 ## 0.1.1
 
