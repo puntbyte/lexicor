@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/lexicor.iml" filepath="$PROJECT_DIR$/lexicor.iml" />
+<module fileurl="file://$PROJECT_DIR$/melos_lexicor.iml" filepath="$PROJECT_DIR$/melos_lexicor.iml"/>
+<module fileurl="file://$PROJECT_DIR$/melos_lexicor.iml" filepath="$PROJECT_DIR$/melos_lexicor.iml"/>
+<module fileurl="file://$PROJECT_DIR$/lexicor.iml" filepath="$PROJECT_DIR$/lexicor.iml"/>
     </modules>
   </component>
 </project>
