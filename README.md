@@ -29,7 +29,7 @@ Add `lexicor` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  lexicor: ^1.0.0
+  lexicor: ^0.1.0
 ```
 
 ## 🚀 Quick Start

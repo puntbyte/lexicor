@@ -1,8 +1,7 @@
 ## 0.1.0
 
 - 🚀 **Initial Release**: Launched Lexicor, the strictly typed Open English WordNet interface.
-- **Database**: Included optimized SQLite database (v6.0 based schema) with `WITHOUT ROWID` 
-  optimizations for reduced footprint (7.8MB).
+- **Database**: Included optimized SQLite database.
 - **API**:
   - Added `Lexicor` facade with `init()`, `lookup()`, and `related()`.
   - Added `StorageMode` to support both Disk and In-Memory operations.
