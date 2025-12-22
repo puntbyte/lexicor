@@ -28,3 +28,9 @@ dev_dependencies:
 
 melos:
   useRootAsPackage: true
+
+  scripts:
+    build:
+      description: Build database
+      run: dart run tool/build_database.dart tool/db/oewn.sqlite
+
