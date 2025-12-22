@@ -1,3 +1,4 @@
+Here is the updated **`README.md`** reflecting the exact version and source of the database you used.
 
 # Lexicor
 
@@ -11,17 +12,13 @@ antonyms, hypernyms, and more, without relying on external APIs or raw text pars
 
 ## ✨ Features
 
-- **🚀 Highly Optimized:** Powered by a custom 7.8MB SQLite database (shrunk from ~25MB) using 
-  `WITHOUT ROWID` optimizations for maximum speed.
-- **🔒 Strictly Typed:** No magic strings or integers. Work with `Concept`, `SpeechPart`, 
-  `RelationType`, and `DomainCategory` objects.
-- **🧠 Morphology Aware:** Automatically handles stem resolution. Searching for *"ran"* matches 
-  *"run"*; *"better"* matches *"good"*.
-- **⚡ Dual Modes:**
-  * **Disk Mode:** Instant startup, low memory usage (ideal for Mobile/CLI).
-  * **Memory Mode:** Loads DB into RAM for nanosecond-level query speeds (ideal for Servers).
-- **🔗 Rich Relations:** Distinguishes between **Semantic** relations (Concept-to-Concept) and 
-  **Lexical** relations (Word-to-Word).
+*   **🚀 Highly Optimized:** Powered by a custom 7.8MB SQLite database (shrunk from ~25MB) using `WITHOUT ROWID` optimizations for maximum speed.
+*   **🔒 Strictly Typed:** No magic strings or integers. Work with `Concept`, `SpeechPart`, `RelationType`, and `DomainCategory` objects.
+*   **🧠 Morphology Aware:** Automatically handles stem resolution. Searching for *"ran"* matches *"run"*; *"better"* matches *"good"*.
+*   **⚡ Dual Modes:**
+    *   **Disk Mode:** Instant startup, low memory usage (ideal for Mobile/CLI).
+    *   **Memory Mode:** Loads DB into RAM for nanosecond-level query speeds (ideal for Servers).
+*   **🔗 Rich Relations:** Distinguishes between **Semantic** relations (Concept-to-Concept) and **Lexical** relations (Word-to-Word).
 
 ## 📦 Installation
 
@@ -29,7 +26,7 @@ Add `lexicor` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  lexicor: ^0.1.0
+  lexicor: ^1.0.0
 ```
 
 ## 🚀 Quick Start
@@ -81,8 +78,7 @@ final db = await Lexicor.init(mode: StorageMode.inMemory);
 
 ### Flutter Integration
 
-Because Flutter assets are packed into the app bundle, `sqlite3` cannot open them directly. You 
-must copy the asset to a file path first (e.g., using `path_provider`).
+Because Flutter assets are packed into the app bundle, `sqlite3` cannot open them directly. You must copy the asset to a file path first (e.g., using `path_provider`).
 
 ```dart
 // In Flutter, copy the asset to ApplicationDocumentsDirectory first, then:
@@ -114,8 +110,8 @@ print(root); // "good"
 
 WordNet distinguishes between two types of links:
 
-1. **Semantic (Concept-to-Concept):** e.g., A *Dog* is an *Animal*.
-2. **Lexical (Word-to-Word):** e.g., *Slow* is the antonym of *Fast*.
+1.  **Semantic (Concept-to-Concept):** e.g., A *Dog* is an *Animal*.
+2.  **Lexical (Word-to-Word):** e.g., *Slow* is the antonym of *Fast*.
 
 `lexicor.related()` returns both, but you can filter them:
 
@@ -134,11 +130,10 @@ final parts = rels.byType(RelationType.partMeronym);
 
 ## 📂 Database & License
 
-This package includes a compressed, optimized version of the **Open English WordNet 2022**.
+This package includes a compressed, optimized version of **[Open English WordNet 2025](https://github.com/x-englishwordnet/sqlite)** (v2.3.2).
 
-- **Database License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (Open English 
-  WordNet).
-- **Package License:** MIT.
+*   **Source:** [Open English Wordnet in Sqlite form](https://github.com/x-englishwordnet/sqlite)
+*   **Database License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (Open English WordNet).
+*   **Package License:** MIT.
 
-Using this package in your commercial app requires you to attribute the Open English WordNet 
-project in your app's About/License section.
+Using this package in your commercial app requires you to attribute the Open English WordNet project in your app's About/License section.
