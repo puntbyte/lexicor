@@ -1,3 +1,8 @@
+## 0.1.1
+
+- **Documentation**: Improved README and added example.
+- **Performance**: Added benchmark script.
+
 ## 0.1.0
 
 - 🚀 **Initial Release**: Launched Lexicor, the strictly typed Open English WordNet interface.
@@ -7,4 +12,3 @@
   - Added `StorageMode` to support both Disk and In-Memory operations.
   - Added `SpeechPart`, `DomainCategory`, and `RelationType` enums for strict typing.
   - Added smart morphology resolution (stemming) for lookups.
-- **Architecture**: Implemented Interface/Implementation pattern to encapsulate database IDs.
