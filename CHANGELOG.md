@@ -1,3 +1,17 @@
+## 0.1.4
+
+- **Performance**:
+  - Introduced a `_prepareStatements()` method in `LexicorService` that runs once upon construction.
+  - All SQL queries (`lookup`, `related`, `lemmatize`, `morphology`) are now `PreparedStatement` 
+    instances, compiled once and reused for the lifetime of the service.
+  - The `close()` method is updated to dispose of all prepared statements.
+
+- **Example Application**:
+  - The `lexicor_demo.dart` example is expanded with more lookup tests to demonstrate morphology 
+    resolution (e.g., `fetching` -> `fetch`) and handling of non-existent words.
+  - The filtering demonstration now covers all parts of speech, including adjectives, adverbs, and 
+    adjective satellites.
+
 ## 0.1.3
 
 - **Documentation**: Fixed typo in README.

@@ -1,4 +1,3 @@
-
 // example/lexicor_demo.dart
 
 import 'package:lexicor/lexicor.dart';
@@ -15,6 +14,11 @@ void main() async {
 
   // --- Run Demonstrations ---
   await demonstrateLookup(lexicor, 'went'); // Shows morphology: went -> go
+  await demonstrateLookup(lexicor, 'go');
+  await demonstrateLookup(lexicor, 'fetch');
+  await demonstrateLookup(lexicor, 'fetching');
+  await demonstrateLookup(lexicor, 'fetches');
+  await demonstrateLookup(lexicor, 'xyz');
   await demonstrateLookup(lexicor, 'bank'); // Shows multiple meanings
   await demonstrateLookup(lexicor, 'better'); // Shows adjective morphology
 
@@ -35,25 +39,35 @@ Future<void> demonstrateLookup(Lexicor lexicor, String wordToLookup) async {
   // The result tells you what forms were searched and what concepts were found.
   print(
     ' • Searched for: "${lookupResult.query}"\n'
-        ' • Resolved to: ${lookupResult.resolvedForms.join(', ')}\n'
-        ' • Found ${lookupResult.concepts.length} unique concepts.',
+    ' • Resolved to: ${lookupResult.resolvedForms.join(', ')}\n'
+    ' • Found ${lookupResult.concepts.length} unique concepts.',
   );
 
+  // No concepts found, end of demo for this word.
   if (lookupResult.isEmpty) {
-    return; // No concepts found, end of demo for this word.
+    return;
   }
 
   // 2. FILTERING CONCEPTS
   // You can easily filter the concepts found in the result.
   final nouns = lookupResult.bySpeechPart(SpeechPart.noun);
   final verbs = lookupResult.bySpeechPart(SpeechPart.verb);
+  final adjectives = lookupResult.bySpeechPart(SpeechPart.adjective);
+  final adverbs = lookupResult.bySpeechPart(SpeechPart.adverb);
+  final adjectiveSatellites = lookupResult.bySpeechPart(SpeechPart.adjectiveSatellite);
+
   print(' • Noun meanings: ${nouns.length}');
   print(' • Verb meanings: ${verbs.length}');
+  print(' • Adjective meanings: ${adjectives.length}');
+  print(' • Adverb meanings: ${adverbs.length}');
+  print(' • Adjective Satellite meanings: ${adjectiveSatellites.length}');
 
   // 3. GETTING RELATIONS
   // Let's explore the *first* concept found for our word.
   final primaryConcept = lookupResult.primary!;
-  print('\nExploring relationships for the primary concept of "${lookupResult.resolvedForms.last}":');
+  print(
+    '\nExploring relationships for the primary concept of "${lookupResult.resolvedForms.last}":',
+  );
 
   // The `related()` method returns a rich result object with all relations.
   final relationResult = lexicor.related(primaryConcept);

@@ -1,5 +1,3 @@
-// lib/src/core/lexicor_service.dart
-
 import 'dart:collection';
 
 import 'package:lexicor/lexicor.dart';
@@ -8,34 +6,27 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// SQLite-backed service powering Lexicor.
 ///
-/// This class encapsulates prepared statements and the tiny morphology cache. It returns plain
-/// model objects and does not perform any I/O beyond queries.
+/// This class encapsulates prepared statements for high performance.
 class LexicorService {
   final Database _db;
-  final LinkedHashMap<String, List<String>> _morphCache = LinkedHashMap();
 
-  /// Controls the LRU size for cached morphology resolutions.
+  // LRU Cache for morphology results
+  final LinkedHashMap<String, List<String>> _morphCache = LinkedHashMap();
   final int morphCacheMax;
 
-  /// Create a new service backed by a [Database] instance.
-  ///
-  /// [morphCacheMax] controls the LRU size for cached morphology resolutions.
-  LexicorService(this._db, {this.morphCacheMax = 1024});
+  // --- Prepared Statements (Compiled once, reused) ---
+  late final PreparedStatement _lookupStmt;
+  late final PreparedStatement _relatedStmt;
+  late final PreparedStatement _lemmatizeStmt; // Finds root from inflection
+  late final PreparedStatement _morphStmt; // Finds inflection from root
 
-  /// Perform a morphology-aware lookup for [word].
-  ///
-  /// The returned [LookupResult] contains:
-  /// - `resolvedForms` (original word first, then base forms),
-  /// - `concepts` (ordered, deduplicated `Concept` objects).
-  LookupResult lookup(String word) {
-    // A. Resolve Morphology (e.g. "running" -> ["running", "run"])
-    final forms = _resolveBaseForms(word);
+  LexicorService(this._db, {this.morphCacheMax = 1024}) {
+    _prepareStatements();
+  }
 
-    final concepts = <Concept>[];
-    final seenIds = <int>{};
-
-    // B. Prepare Statement
-    final statement = _db.prepare('''
+  void _prepareStatements() {
+    // 1. Concept Lookup
+    _lookupStmt = _db.prepare('''
       SELECT s.id, s.part_of_speech_id, s.domain_category_id 
       FROM synset s 
       JOIN sense se ON s.id = se.synset_id 
@@ -44,46 +35,8 @@ class LexicorService {
       ORDER BY se.sense_sort_order ASC
     ''');
 
-    // C. Query for each form
-    for (final form in forms) {
-      final rows = statement.select([form]);
-
-      for (final row in rows) {
-        final id = row['id'] as int;
-
-        // Dedup: If we found this concept via "running", don't add it again via "run"
-        if (seenIds.contains(id)) continue;
-        seenIds.add(id);
-
-        concepts.add(
-          ConceptImpl(
-            id: id,
-            part: SpeechPart.fromId(row['part_of_speech_id'] as String),
-            category: DomainCategory.fromId(row['domain_category_id'] as int),
-          ),
-        );
-      }
-    }
-    statement.dispose();
-
-    return LookupResult(query: word, resolvedForms: forms, concepts: concepts);
-  }
-
-  /// Return related words (lexical + semantic) for [concept].
-  ///
-  /// If [type] is provided, results are filtered to that [RelationType].
-  List<RelatedWord> getRelated(Concept concept, [RelationType? type]) {
-    // SECURITY CHECK: Ensure the user passed a valid object we created.
-    if (concept is! ConceptImpl) {
-      throw ArgumentError(
-        'Invalid Concept provided. You must use a Concept object returned by lookup().',
-      );
-    }
-
-    // Access the hidden ID
-    final synsetId = concept.id;
-
-    final statement = _db.prepare('''
+    // 2. Relationship Lookup (Union of Semantic and Lexical)
+    _relatedStmt = _db.prepare('''
       SELECT w.text, rel.relationship_type_id, 1 as is_semantic
       FROM semantic_relationship rel
       JOIN sense target_s ON rel.target_synset_id = target_s.synset_id
@@ -98,8 +51,65 @@ class LexicorService {
       WHERE source_s.synset_id = ?
     ''');
 
-    final results = statement.select([synsetId, synsetId]);
-    statement.dispose();
+    // 3. Lemmatization (Input "went" -> Find "go")
+    // We look in morphological_form to find the ID, then map back to the base word.
+    _lemmatizeStmt = _db.prepare('''
+      SELECT DISTINCT w.text
+      FROM morphological_form mf
+      JOIN word_morphology wm ON mf.id = wm.morphological_form_id
+      JOIN word w ON wm.word_id = w.id
+      WHERE mf.text = ? COLLATE NOCASE
+    ''');
+
+    // 4. Morphology (Input "go" -> Find "went")
+    // Used for specific morphology lookups
+    _morphStmt = _db.prepare('''
+      SELECT mf.text 
+      FROM word w 
+      JOIN word_morphology wm ON w.id = wm.word_id 
+      JOIN morphological_form mf ON wm.morphological_form_id = mf.id 
+      WHERE w.text = ? COLLATE NOCASE AND wm.part_of_speech_id = ?
+    ''');
+  }
+
+  /// Perform a morphology-aware lookup.
+  LookupResult lookup(String word) {
+    // A. Resolve Base Forms (e.g. "fetches" -> ["fetches", "fetch"])
+    final forms = _resolveBaseForms(word);
+
+    final concepts = <Concept>[];
+    final seenIds = <int>{};
+
+    // B. Query for every form found
+    for (final form in forms) {
+      final rows = _lookupStmt.select([form]);
+
+      for (final row in rows) {
+        final id = row['id'] as int;
+
+        if (seenIds.contains(id)) continue;
+        seenIds.add(id);
+
+        concepts.add(
+          ConceptImpl(
+            id: id,
+            part: SpeechPart.fromId(row['part_of_speech_id'] as String),
+            category: DomainCategory.fromId(row['domain_category_id'] as int),
+          ),
+        );
+      }
+    }
+
+    return LookupResult(query: word, resolvedForms: forms, concepts: concepts);
+  }
+
+  List<RelatedWord> getRelated(Concept concept, [RelationType? type]) {
+    if (concept is! ConceptImpl) {
+      throw ArgumentError('Invalid Concept provided. Use object from lookup().');
+    }
+
+    final synsetId = concept.id;
+    final results = _relatedStmt.select([synsetId, synsetId]);
 
     var list = results.map((row) {
       return RelatedWord(
@@ -114,50 +124,43 @@ class LexicorService {
     return list;
   }
 
-  /// Return the morphological base form for [word] and [pos], or [word] if none.
   String getMorphology(String word, SpeechPart pos) {
-    final statement = _db.prepare('''
-      SELECT mf.text FROM word w 
-      JOIN word_morphology wm ON w.id = wm.word_id 
-      JOIN morphological_form mf ON wm.morphological_form_id = mf.id 
-      WHERE w.text = ? COLLATE NOCASE AND wm.part_of_speech_id = ?
-    ''');
-    final result = statement.select([word, pos.id]);
-    statement.dispose();
-
+    final result = _morphStmt.select([word, pos.id]);
     if (result.isEmpty) return word;
     return result.first['text'] as String;
   }
 
   // --- Helpers ---
 
+  /// Finds the base root(s) for a given word.
+  /// Example: "went" -> ["went", "go"]
   List<String> _resolveBaseForms(String word) {
     if (_morphCache.containsKey(word)) return _morphCache[word]!;
 
-    final statement = _db.prepare(
-      'SELECT mf.text FROM word w '
-      'JOIN word_morphology wm ON w.id = wm.word_id '
-      'JOIN morphological_form mf ON wm.morphological_form_id = mf.id '
-      'WHERE w.text = ? COLLATE NOCASE',
-    );
-    final rows = statement.select([word]);
-    statement.dispose();
+    final rows = _lemmatizeStmt.select([word]);
 
-    final forms = <String>{word}; // Always start with original
+    // Always include the original query (it might be a base word itself)
+    final forms = <String>{word};
+
     for (final row in rows) {
       forms.add(row['text'] as String);
     }
 
     final resultList = forms.toList();
 
-    // Simple LRU Cache logic
+    // Cache maintenance
     if (_morphCache.length >= morphCacheMax) _morphCache.remove(_morphCache.keys.first);
-
     _morphCache[word] = resultList;
 
     return resultList;
   }
 
   /// Dispose prepared statements and close the DB.
-  void close() => _db.dispose();
+  void close() {
+    _lookupStmt.dispose();
+    _relatedStmt.dispose();
+    _lemmatizeStmt.dispose();
+    _morphStmt.dispose();
+    _db.dispose();
+  }
 }
