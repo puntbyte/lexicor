@@ -64,11 +64,11 @@ class LexicorService {
     // 4. Morphology (Input "go" -> Find "went")
     // Used for specific morphology lookups
     _morphStmt = _db.prepare('''
-      SELECT mf.text 
-      FROM word w 
-      JOIN word_morphology wm ON w.id = wm.word_id 
-      JOIN morphological_form mf ON wm.morphological_form_id = mf.id 
-      WHERE w.text = ? COLLATE NOCASE AND wm.part_of_speech_id = ?
+      SELECT w.text 
+      FROM morphological_form mf
+      JOIN word_morphology wm ON mf.id = wm.morphological_form_id
+      JOIN word w ON wm.word_id = w.id
+      WHERE mf.text = ? COLLATE NOCASE AND wm.part_of_speech_id = ?
     ''');
   }
 
