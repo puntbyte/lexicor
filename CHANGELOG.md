@@ -1,5 +1,6 @@
 ## 0.2.0
 
+
 ### Breaking changes
 - `Lexicor.morphology()` renamed to `Lexicor.lemmatize()`. The old name was
   misleading — the method returns the base lemma of an inflected form.
