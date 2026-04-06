@@ -5,7 +5,6 @@
 **Lexicor** is a strictly typed, highly optimized, offline interface for the
 [Open English WordNet](https://en-word.net/).
 
-
 Powered by an embedded SQLite database — no external APIs, no raw text parsing.
 
 ## ✨ Features
