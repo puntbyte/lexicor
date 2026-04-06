@@ -2,33 +2,33 @@
 
 [![pub package](https://img.shields.io/pub/v/lexicor.svg)](https://pub.dev/packages/lexicor)
 
-**Lexicor** is a strictly typed, highly optimized, offline interface for the 
+**Lexicor** is a strictly typed, highly optimized, offline interface for the
 [Open English WordNet](https://en-word.net/).
 
-It provides a high-performance, embedded SQL engine to query English definitions, synonyms, 
-antonyms, hypernyms, and more, without relying on external APIs or raw text parsing.
+Powered by an embedded SQLite database — no external APIs, no raw text parsing.
 
 ## ✨ Features
 
-- **🚀 Ultra Fast:** Microsecond-level lookups (~20µs on disk). Powered by a custom SQLite database
-  using `WITHOUT ROWID` optimizations and specific covering indexes.
-- **🔒 Strictly Typed:** No magic strings or integers. Work with `Concept`, `SpeechPart`, 
-  `RelationType`, and `DomainCategory` objects.
-- **🧠 Morphology Aware:** Automatically handles stem resolution. Searching for *"ran"* matches 
-  *"run"*; *"better"* matches *"good"*.
-- **⚡ Dual Modes:**
-  - **Disk Mode:** Instant startup (<25ms), low memory usage.
-  - **Memory Mode:** Loads DB into RAM for nanosecond-level query speeds.
-- **🔗 Rich Relations:** Distinguishes between **Semantic** relations (Concept-to-Concept) and 
-  **Lexical** relations (Word-to-Word).
+- **🚀 Ultra Fast:** Microsecond-level lookups (~20µs on disk). `WITHOUT ROWID`
+  tables, covering indexes, and LRU result caching.
+- **🔒 Strictly Typed:** `Concept`, `SpeechPart`, `RelationType`, `DomainCategory` —
+  no magic strings or integers anywhere.
+- **🧠 Morphology Aware:** Automatic stem resolution. *"ran"* → *"run"*,
+  *"better"* → *"good"*.
+- **📖 Optional Definitions:** Pass `withDefinitions: true` to get WordNet glosses
+  on every concept — or keep the default lightweight build when you don't need them.
+- **🔗 Rich Relations:** Semantic (Concept-to-Concept) and Lexical (Word-to-Word)
+  relations, filterable by type in SQL.
+- **🌲 Recursive Traversal:** Walk hypernym/hyponym chains to arbitrary depth via
+  a single SQLite recursive CTE.
+- **⚡ Dual Storage Modes:** Disk mode (instant startup) or Memory mode (fastest
+  queries).
 
 ## 📦 Installation
 
-Add `lexicor` to your `pubspec.yaml`:
-
 ```yaml
 dependencies:
-  lexicor: ^0.1.0
+  lexicor: ^0.2.0
 ```
 
 ## 🚀 Quick Start
@@ -37,126 +37,207 @@ dependencies:
 import 'package:lexicor/lexicor.dart';
 
 void main() async {
-  // 1. Initialize (Disk mode is default)
-  final lexicor = await Lexicor.init();
+  final lexicor = await Lexicor.init();           // lightweight, no definitions
+  // final lexicor = await Lexicor.init(withDefinitions: true); // full mode
 
-  // 2. Lookup a word
   final result = lexicor.lookup('bank');
-  
   print('Found ${result.concepts.length} concepts for "${result.query}"');
 
-  // 3. Iterate concepts
   for (final concept in result.concepts) {
     print('[${concept.part.label}] ${concept.category.label}');
-    
-    // 4. Get relationships (Hypernyms, Parts, Antonyms...)
-    final relations = lexicor.related(concept);
-    
-    for (final rel in relations.withRelation(RelationType.hypernym)) {
+    if (concept.definition != null) print('  ${concept.definition}');
+
+    final hypernyms = lexicor.related(concept, type: RelationType.hypernym);
+    for (final rel in hypernyms.items) {
       print('  -> is a type of: ${rel.word}');
     }
   }
 
-  // 5. Cleanup
   lexicor.close();
 }
 ```
 
 ## 📖 Usage Guide
 
-### Initialization Modes
-
-Lexicor offers two ways to load the database via `StorageMode`:
+### Initialization
 
 ```dart
-// 1. StorageMode.onDisk (Default)
-// Instant startup (~25ms). Queries take ~20-50µs. 
-// Best for CLI tools and Mobile apps.
-final db = await Lexicor.init(mode: StorageMode.onDisk);
+// Light mode — no definitions (~28 MB asset, default)
+final lexicor = await Lexicor.init();
 
-// 2. StorageMode.inMemory
-// Slower startup (~100ms copy time) but faster queries (~15µs). 
-// Best for backend servers or heavy batch processing.
-final db = await Lexicor.init(mode: StorageMode.inMemory);
-```
+// Full mode — definitions + usage examples (~40 MB asset)
+final lexicor = await Lexicor.init(withDefinitions: true);
 
-### Flutter Integration
-
-Because Flutter assets are packed into the app bundle, `sqlite3` cannot open them directly from the
-bundle. You must copy the asset to a file path first (e.g., using `path_provider`).
-
-```dart
-// 1. Copy 'dictionary.sqlite' from assets to Application Documents Directory.
-// 2. Pass that path to Lexicor:
+// Memory mode — copy DB into RAM for fastest repeated queries
 final lexicor = await Lexicor.init(
-  customPath: '/path/to/app_documents/dictionary.sqlite',
+  mode: StorageMode.inMemory,
+  withDefinitions: true,
 );
 ```
 
-### Morphology
+| Flag                               | Asset                           | `Concept.definition` | `examples()` | Best for               |
+|------------------------------------|---------------------------------|----------------------|--------------|------------------------|
+| `withDefinitions: false` (default) | `dictionary.sqlite` ~28 MB      | `null`               | `[]`         | Mobile, CLI, embedding |
+| `withDefinitions: true`            | `dictionary_full.sqlite` ~40 MB | populated            | sentences    | Dictionaries, NLP      |
 
-Lexicor automatically resolves word forms. You don't need to manually stem words.
-
-```dart
-// The user types "running"
-final result = lexicor.lookup('running');
-
-// Lexicor automatically searches for "run"
-print(result.resolvedForms); // ['running', 'run']
-```
-
-If you need raw access to morphology:
+### Definitions
 
 ```dart
-final root = lexicor.morphology('better', SpeechPart.adjective);
-print(root); // "good"
+final lexicor = await Lexicor.init(withDefinitions: true);
+final result = lexicor.lookup('bank');
+for (final concept in result.concepts) {
+  print(concept.definition);
+  // "a financial institution that accepts deposits..."
+  // "a long ridge or pile..."
+}
 ```
+
+`concept.definition` is always `null` in light mode — safe to use without
+checking the mode:
+
+```dart
+final def = concept.definition ?? '(no definition)';
+```
+
+### Usage Examples
+
+```dart
+final lexicor = await Lexicor.init(withDefinitions: true);
+final concept = lexicor.lookup('run').primary!;
+
+for (final example in lexicor.examples(concept)) {
+  print(example); // "she ran to catch the bus"
+}
+```
+
+Returns an empty list in light mode.
+
+### Synonyms
+
+```dart
+final concept = lexicor.lookup('car').primary!;
+final syns = lexicor.synonyms(concept);
+// ['car', 'auto', 'automobile', 'motorcar']
+```
+
+These are strict synonyms — words that share the exact same synset. For broader
+similarity, use `related(concept, type: RelationType.similar)`.
+
+### Recursive Traversal
+
+Walk a relation chain to arbitrary depth in a single DB call:
+
+```dart
+final dog = lexicor.lookup('dog').primary!;
+final chain = lexicor.traverse(dog, RelationType.hypernym, maxDepth: 5);
+
+for (final word in chain) {
+  print('${'  ' * word.depth}${word.word}');
+}
+// canine
+//   carnivore
+//     placental
+//       mammal
+//         ...
+```
+
+`traverse` uses a SQLite recursive CTE — the entire hierarchy walk is done in
+one round-trip. Only works for relations where `RelationType.isRecursive` is
+`true` (hypernym, hyponym, partMeronym, etc.).
 
 ### Relationships
-
-WordNet distinguishes between two types of links:
-
-1.  **Semantic (Concept-to-Concept):** e.g., A *Dog* is an *Animal*.
-2.  **Lexical (Word-to-Word):** e.g., *Slow* is the antonym of *Fast*.
-
-`lexicor.related()` returns both, but you can filter them:
 
 ```dart
 final rels = lexicor.related(concept);
 
-// Get synonyms, hypernyms, etc.
-final semantic = rels.semanticOnly;
+// SQL-level type filter — no wasted data transfer
+final hypernyms = lexicor.related(concept, type: RelationType.hypernym);
 
-// Get antonyms, derivations, etc.
-final lexical = rels.lexicalOnly;
+// Or filter the result object
+final semantic = rels.semantic;            // Concept-to-Concept links
+final lexical  = rels.lexical;             // Word-to-Word links
+final antonyms = rels.byType(RelationType.antonym);
+```
 
-// Filter by specific type
-final parts = rels.byType(RelationType.partMeronym);
+### Batch Lookup
+
+```dart
+final results = lexicor.lookupBatch(['run', 'walk', 'swim', 'run']);
+// 'run' is only queried once; the second entry is served from cache.
+results['run']?.concepts.length;
+```
+
+### Morphology
+
+```dart
+// Automatic during lookup:
+lexicor.lookup('running').resolvedForms; // ['running', 'run']
+
+// Direct lemmatization:
+lexicor.lemmatize('ran', SpeechPart.verb);        // 'run'
+lexicor.lemmatize('better', SpeechPart.adjective); // 'good'
+```
+
+### Flutter Integration
+
+```dart
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:lexicor/lexicor.dart';
+
+Future<Lexicor> initLexicor({bool withDefinitions = false}) async {
+  final assetName = withDefinitions ? 'dictionary_full.sqlite' : 'dictionary.sqlite';
+  final dir  = await getApplicationDocumentsDirectory();
+  final file = File('${dir.path}/$assetName');
+
+  if (!file.existsSync()) {
+    final data = await rootBundle.load('packages/lexicor/assets/$assetName');
+    await file.writeAsBytes(data.buffer.asUint8List());
+  }
+
+  return Lexicor.init(customPath: file.path, withDefinitions: withDefinitions);
+}
+```
+
+## 🛠 Building the Database
+
+Place your `oewn.sqlite` (~165 MB source file) at `tool/db/oewn.sqlite`, then:
+
+```bash
+# Light build only (~28 MB)
+dart run tool/build_database.dart tool/db/oewn.sqlite
+
+# Full build only (~40 MB)
+dart run tool/build_database.dart tool/db/oewn.sqlite --full
+
+# Both at once
+dart run tool/build_database.dart tool/db/oewn.sqlite --all
+
+# Or via melos
+melos run build
+melos run build:full
+melos run build:all
 ```
 
 ## 📊 Database Stats
 
-Lexicor uses a highly optimized database structure. Unlike raw SQL dumps (often 100MB+), Lexicor is 
-compressed to **~27 MB** while maintaining full relationship graphs.
+| Component              | Light   | Full    | Description                          |
+|:-----------------------|:--------|:--------|:-------------------------------------|
+| **Words**              | 3.0 MB  | 3.0 MB  | ~150k unique lemmas                  |
+| **Concepts**           | 1.36 MB | 1.36 MB | ~120k Synsets                        |
+| **Senses**             | 3.4 MB  | 3.4 MB  | ~210k Word-Concept pairs             |
+| **Semantic Relations** | 3.7 MB  | 3.7 MB  | Hypernyms, Holonyms, Entailments     |
+| **Lexical Relations**  | 4.0 MB  | 4.0 MB  | Antonyms, Derivations                |
+| **Indexes**            | ~11 MB  | ~11 MB  | `COLLATE NOCASE` indexes             |
+| **Definitions**        | —       | ~10 MB  | Synset glosses (~120k rows)          |
+| **Examples**           | —       | ~2 MB   | Usage sentences from `samples` table |
+| **Total**              | ~28 MB  | ~40 MB  |                                      |
 
-| Component              | Size    | Description                                      |
-|:-----------------------|:--------|:-------------------------------------------------|
-| **Words**              | 3.0 MB  | ~150k unique lemmas                              |
-| **Concepts**           | 1.36 MB | ~120k Synsets                                    |
-| **Senses**             | 3.4 MB  | ~210k Word-Concept pairs                         |
-| **Semantic Relations** | 3.7 MB  | Hypernyms, Holonyms, Entailments (WITHOUT ROWID) |
-| **Lexical Relations**  | 4.0 MB  | Antonyms, Derivations (WITHOUT ROWID)            |
-| **Indexes**            | ~11 MB  | `COLLATE NOCASE` indexes for instant lookups     |
+## 📂 License
 
-## 📂 Database Source & License
+- **Package License:** MIT
+- **Database:** [Open English WordNet 2025](https://github.com/x-englishwordnet/sqlite) (v2.3.2),
+  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-This package includes a compressed, optimized version of 
-**[Open English WordNet 2025](https://github.com/x-englishwordnet/sqlite)** (v2.3.2).
-
-- **Source:** [Open English Wordnet in Sqlite form](https://github.com/x-englishwordnet/sqlite)
-- **Database License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (Open English 
-  WordNet).
-- **Package License:** MIT.
-
-Using this package in your commercial app requires you to attribute the Open English WordNet 
-project in your app's About/License section.
+Commercial use requires attribution to the Open English WordNet project in your
+app's About / Licenses section.

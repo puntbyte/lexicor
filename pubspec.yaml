@@ -1,7 +1,8 @@
 name: lexicor
 description: >-
   An optimized, strictly typed, offline interface for the Open English WordNet database.
-version: 0.1.4
+  Supports lightweight (no definitions) and full (with definitions) modes.
+version: 0.2.0
 
 repository: https://github.com/puntbyte/lexicor
 homepage: https://github.com/puntbyte/lexicor
@@ -16,13 +17,18 @@ topics:
 environment:
   sdk: ^3.10.0
 
+flutter:
+  assets:
+    - lib/assets/dictionary.sqlite
+    - lib/assets/dictionary_full.sqlite
+
 dependencies:
   meta: ^1.16.0
-  path: ^1.9.1
   sqlite3: ^2.8.0
 
 dev_dependencies:
   melos: ^7.3.0
+  path: ^1.9.1
   test: ^1.26.0
   very_good_analysis: ^10.0.0
 
@@ -31,5 +37,13 @@ melos:
 
   scripts:
     build:
-      description: Build database
+      description: Build light database (no definitions, ~28 MB)
       run: dart run tool/build_database.dart tool/db/oewn.sqlite
+
+    build:full:
+      description: Build full database (definitions + examples, ~40 MB)
+      run: dart run tool/build_database.dart tool/db/oewn.sqlite --full
+
+    build:all:
+      description: Build both databases
+      run: dart run tool/build_database.dart tool/db/oewn.sqlite --all
